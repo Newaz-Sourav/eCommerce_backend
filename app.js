@@ -30,4 +30,6 @@ app.use("/user",userRouter);
 app.use("/products",productsRouter);
 app.use("/order",orderRouter);
 
-app.listen(3000);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
