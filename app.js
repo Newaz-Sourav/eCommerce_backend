@@ -8,6 +8,7 @@ const productsRouter = require("./routes/productsRouter");
 const indexRouter = require("./routes/indexRouter");
 const orderRouter = require("./routes/orderRouter");
 const cors = require('cors');
+const PORT = process.env.PORT || 3000;
 
 app.use(cors({
   origin: true, 
