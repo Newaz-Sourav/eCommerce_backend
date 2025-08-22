@@ -29,7 +29,7 @@ app.use("/products", productsRouter);
 app.use("/order", orderRouter);
 
 // Listen on Render's port
-const PORT = process.env.PORT || 4000;
+const PORT = 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
