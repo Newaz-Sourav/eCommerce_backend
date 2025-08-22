@@ -3,7 +3,7 @@ const dbgr = require("debug")("development:mongoose");
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(`mongodb+srv://nsourov07:sourav1998@clusterfirst.bb6tecs.mongodb.net/eCommerce`, {
+    const conn = await mongoose.connect(process.env.DB, {
         
     });
     dbgr("MongoDB Connected");
