@@ -18,6 +18,7 @@ router.get("/orders", isOwnerLoggedin, async (req, res) => {
 
     // Format response
     const formattedOrders = orders.map(order => ({
+      _id: order._id,
       name: order.name,
       email: order.email,
       location: order.location,
