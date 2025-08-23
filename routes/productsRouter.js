@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const upload = require("../config/multer_config");
+const isOwnerLoggedin = require("../middlewares/isOwnerLoggedin");
 const productModel = require("../models/productModel");
 
-router.get("/allproducts",async function(req,res){
+router.get("/allproducts",isOwnerLoggedin,async function(req,res){
 
     try{
 
@@ -16,7 +17,7 @@ router.get("/allproducts",async function(req,res){
     }
 });
 
-router.post("/create", upload.single("image"),async function(req,res)
+router.post("/create", upload.single("image"),isOwnerLoggedin,async function(req,res)
 {
     try{
         let {name,price,discount,bgcolor,panelcolor,textcolor,category}=req.body;
@@ -40,7 +41,7 @@ router.post("/create", upload.single("image"),async function(req,res)
 });
 
 
-router.put("/update/:id", upload.single("image"), async function (req, res) {
+router.put("/update/:id", upload.single("image"), isOwnerLoggedin,async function (req, res) {
     try {
         const { name, price, discount, bgcolor, panelcolor, textcolor,category } = req.body;
         const productId = req.params.id;
@@ -73,7 +74,7 @@ router.put("/update/:id", upload.single("image"), async function (req, res) {
     }
 });
 
-router.delete("/delete/:id", async function (req, res) {
+router.delete("/delete/:id", isOwnerLoggedin,async function (req, res) {
     try {
         const productId = req.params.id;
 
