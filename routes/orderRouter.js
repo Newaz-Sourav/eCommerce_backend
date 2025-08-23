@@ -3,7 +3,42 @@ const router = express.Router();
 const Order = require("../models/orderModel");
 const isloggedin = require("../middlewares/isloggedin");
 const User = require("../models/userModel");
+const isOwnerLoggedin = require("../middlewares/isOwnerLoggedin");
 const { route } = require("./userRouter");
+
+
+router.get("/orders", isOwnerLoggedin, async (req, res) => {
+  try {
+    const orders = await Order.find()
+      .populate({
+        path: "items.product", // populate product details inside items
+        select: "name image price" // include name, image, price
+      })
+      .exec();
+
+    // Format response
+    const formattedOrders = orders.map(order => ({
+      name: order.name,
+      email: order.email,
+      location: order.location,
+      phone: order.phone,
+      items: order.items.map(item => ({
+        productName: item.product?.name || "Unknown",
+        productImage: item.product?.image || "",
+        productPrice: item.product?.price || 0,
+        quantity: item.quantity
+      })),
+      totalPrice: order.totalPrice,
+      orderDate: order.orderDate,
+      orderStatus: order.order_status
+    }));
+
+    res.json(formattedOrders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    res.status(500).json({ message: "Failed to fetch orders" });
+  }
+});
 
 // Place an order (Protected Route)
 router.post("/placeorder", isloggedin, async (req, res) => {
