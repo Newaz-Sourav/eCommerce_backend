@@ -63,7 +63,7 @@ router.put("/update/:id", upload.single("image"), isOwnerLoggedin,async function
         
     
         if (req.file) {
-            product.image = req.file.buffer;
+            product.image = req.file ? req.file.buffer.toString("base64") : "";
         }
 
         await product.save();
