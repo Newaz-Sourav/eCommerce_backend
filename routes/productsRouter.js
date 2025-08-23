@@ -23,7 +23,7 @@ router.post("/create", upload.single("image"),isOwnerLoggedin,async function(req
         let {name,price,discount,bgcolor,panelcolor,textcolor,category}=req.body;
 
     const product = await productModel.create({
-        image:req.file.buffer,
+        image: req.file ? req.file.buffer.toString("base64") : "",
         name,
         price,
         discount,
