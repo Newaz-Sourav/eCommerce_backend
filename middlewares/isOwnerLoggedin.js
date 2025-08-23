@@ -5,7 +5,7 @@ module.exports = async function (req,res,next)
 {
     if(!req.cookies.token)
     {
-        res.status(501).send("You have to login first");
+        res.status(401).send("You have to login first");
     }
 
     try{
