@@ -83,7 +83,7 @@ router.post("/placeorder", isloggedin, async (req, res) => {
   }
 });
 
-router.put("/order_status/:id", isloggedin, async (req, res) => {
+router.put("/order_status/:id", isOwnerLoggedin, async (req, res) => {
   try {
     const orderid = req.params.id;
     const { status } = req.body;
