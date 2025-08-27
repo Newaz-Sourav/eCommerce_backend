@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const userModel = require("../models/userModel");
+const orderModel = require("../models/orderModel");
 const bcrypt=require("bcrypt");
 const jwt = require("jsonwebtoken");
 const {generateToken}=require("../utils/generateToken");
@@ -11,6 +12,30 @@ require("dotenv").config();
 //cache memory
 const NodeCache = require("node-cache");
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 600 }); // 5 min TTL, check period 10 min
+
+
+router.get("/profile", isloggedin, async (req, res) => {
+  try {
+    const user = await userModel.findById(req.user._id).select("-password"); // exclude password
+    if (!user) return res.status(404).send("User not found");
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+router.get("/orders", isloggedin, async (req, res) => {
+  try {
+    const orders = await orderModel
+      .find({ user: req.user._id })
+      .populate("items.product", "name image price") // get product details
+      .sort({ orderDate: -1 }); // newest first
+
+    res.status(200).json(orders);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 
 
