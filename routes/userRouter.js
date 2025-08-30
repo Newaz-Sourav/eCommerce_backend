@@ -188,30 +188,43 @@ router.post("/removefromcart/:id", isloggedin, async (req, res) => {
   try {
     const productId = req.params.id;
     const userEmail = req.user.email;
-    const removeCompletely = req.body.removeCompletely || false;
+    const removeCompletely = req.body.removeCompletely === true; // strict boolean
 
     const user = await userModel.findOne({ email: userEmail }).populate("cart.product");
     if (!user) return res.status(404).send("User not found");
 
-    const index = user.cart.findIndex(item => item.product._id.toString() === productId);
+    const index = user.cart.findIndex(item => item.product._id.toString() === productId.toString());
+
     if (index > -1) {
-      if (removeCompletely || user.cart[index].quantity <= 1) {
+      if (removeCompletely) {
+        // remove completely regardless of quantity
         user.cart.splice(index, 1);
       } else {
+        // decrease quantity by 1
         user.cart[index].quantity -= 1;
+        if (user.cart[index].quantity <= 0) {
+          user.cart.splice(index, 1);
+        }
       }
 
-      user.cartTotal = user.cart.reduce((sum, item) => sum + (item.price || item.product.price) * item.quantity, 0);
+      // recalc total
+      user.cartTotal = user.cart.reduce(
+        (sum, item) => sum + (item.price || item.product.price) * item.quantity,
+        0
+      );
+
       await user.save();
       cache.del(userEmail);
 
-      res.status(200).json({ message: "Product removed from cart successfully", cart: user.cart, cartTotal: user.cartTotal });
+      return res.status(200).json({ message: "Product removed from cart successfully", cart: user.cart, cartTotal: user.cartTotal });
     } else {
-      res.status(404).send("Product not found in cart");
+      return res.status(404).send("Product not found in cart");
     }
+
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
+
 
 module.exports = router;
