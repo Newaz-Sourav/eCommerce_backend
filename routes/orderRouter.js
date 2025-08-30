@@ -44,43 +44,44 @@ router.get("/orders", isOwnerLoggedin, async (req, res) => {
 // Place an order (Protected Route)
 router.post("/placeorder", isloggedin, async (req, res) => {
   try {
-    const { name, email, location, phone } = req.body;
+    const { name, email, location,phone } = req.body;
     const user = await User.findById(req.user._id).populate("cart.product");
 
-    if (!user || user.cart.length === 0) return res.status(400).json({ message: "Cart is empty" });
+    if (!user || user.cart.length === 0) {
+      return res.status(400).json({ message: "Cart is empty" });
+    }
 
-    const orderItems = user.cart.map(item => ({
-      product: item.product._id,
-      quantity: item.quantity,
-      price: item.price || item.product?.price
-    }));
+    //  cart total হিসাব করা
+    const cartTotal = user.cart.reduce((sum, item) => {
+      return sum + (item.product.price * item.quantity);
+    }, 0);
 
-    const totalPrice = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
-    const newOrder = await Order.create({
+    // Create order
+    const newOrder = new Order({
       user: user._id,
       name,
       email,
       location,
       phone,
-      items: orderItems,
-      totalPrice
+      items: user.cart,
+      totalPrice: cartTotal
     });
 
-    // Clear cart and total
+    await newOrder.save();
+
+    // Clear cart
     user.cart = [];
-    user.cartTotal = 0;
     await user.save();
 
-    // Clear cache
-    cache.del(user.email);
+    res.status(201).json({
+      message: "Order placed successfully",
+      order: newOrder
+    });
 
-    res.status(201).json({ message: "Order placed successfully", order: newOrder });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
-
 
 router.put("/order_status/:id", isOwnerLoggedin, async (req, res) => {
   try {
