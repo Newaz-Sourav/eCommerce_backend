@@ -1,22 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const userModel = require("../models/userModel");
-const orderModel = require("../models/orderModel");
-const bcrypt=require("bcrypt");
-const jwt = require("jsonwebtoken");
-const {generateToken}=require("../utils/generateToken");
-const isloggedin = require("../middlewares/isloggedin");
 const productModel = require("../models/productModel");
-require("dotenv").config();
+const bcrypt = require("bcrypt");
+const { generateToken } = require("../utils/generateToken");
+const isloggedin = require("../middlewares/isloggedin");
+const cache = require("../controllers/cache"); // shared cache
 
-//cache memory
-const NodeCache = require("node-cache");
-const cache = new NodeCache({ stdTTL: 300, checkperiod: 600 }); // 5 min TTL, check period 10 min
-
-
+// Get user profile
 router.get("/profile", isloggedin, async (req, res) => {
   try {
-    const user = await userModel.findById(req.user._id).select("-password"); // exclude password
+    const user = await userModel.findById(req.user._id).select("-password");
     if (!user) return res.status(404).send("User not found");
     res.status(200).json(user);
   } catch (err) {
@@ -24,41 +18,16 @@ router.get("/profile", isloggedin, async (req, res) => {
   }
 });
 
-router.get("/orders", isloggedin, async (req, res) => {
+// Get user's cart
+router.get("/cart", isloggedin, async (req, res) => {
   try {
-    const orders = await orderModel
-      .find({ user: req.user._id })
-      .populate("items.product", "name image price") // get product details
-      .sort({ orderDate: -1 }); // newest first
-
-    res.status(200).json(orders);
-  } catch (err) {
-    res.status(500).send(err.message);
-  }
-});
-
-
-
-router.get("/cart",isloggedin,async function(req,res)
-{
-     try {
     const userEmail = req.user.email;
 
-    // check if cache exists
     const cachedCart = cache.get(userEmail);
-    if (cachedCart) {
-      return res.status(200).json(cachedCart);
-    }
+    if (cachedCart) return res.status(200).json(cachedCart);
 
-    const user = await userModel.findOne({ email: userEmail })
-      .populate({
-        path: "cart.product",
-        select: "name image"
-      });
-
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
+    const user = await userModel.findOne({ email: userEmail }).populate("cart.product", "name image price");
+    if (!user) return res.status(404).send("User not found");
 
     const cartData = user.cart.map(item => ({
       _id: item.product._id,
@@ -69,10 +38,7 @@ router.get("/cart",isloggedin,async function(req,res)
     }));
 
     const response = { cart: cartData, cartTotal: user.cartTotal };
-
-    // set cache
     cache.set(userEmail, response);
-
     res.status(200).json(response);
 
   } catch (err) {
@@ -80,183 +46,62 @@ router.get("/cart",isloggedin,async function(req,res)
   }
 });
 
-router.post("/register",async function(req,res){
-
-   try{
-     let {fullname, email, password}=req.body;
-
-     let user =await userModel.findOne({email:email});
-
-     if(user){
-        return res.status(401).send("Already Registered");
-     }
-
-        bcrypt.genSalt(10, function(err, salt) {         
-        bcrypt.hash(password, salt,async function(err, hash) {
-           
-            if(err){
-                res.status(500).send(err.message);
-            }
-
-        let newUSer = await userModel.create({
-        fullname,
-        email,
-        password:hash,
-    });
-
-    let token=generateToken(newUSer);
-    res.cookie('token', token, {
-                 httpOnly: true,
-                  secure: true,      
-                  sameSite: 'None',
-                  maxAge: 7 * 24 * 60 * 60 * 1000      
-                  });
-    res.status(200).send("User Created succesfully");
-        });
-    });
-
-    
-   }
-   catch(err)
-   {
-    res.status(500).send(err.message);
-   }
-})
-
-router.post("/login", async function(req,res)
-{
-    try{
-        let {email,password}=req.body;
-    const user = await userModel.findOne({email:email});
-
-    if(!user)
-    {
-        return res.status(501).send("Invalid email or password");
-    }
-
-    bcrypt.compare(password,user.password, function(err,result){
-        if(result)
-        {
-            let token = generateToken(user);
-            res.cookie('token', token, {
-                 httpOnly: true,
-                  secure: true,      
-                  sameSite: 'None',
-                  maxAge: 7 * 24 * 60 * 60 * 1000      
-                  });
-            res.send("Logged in");
-        }
-
-        else{
-             return res.status(501).send("Invalid email or password");
-        }
-    })
-    }catch(err){
-        res.status(500).send(err.message);
-    }
-})
-
-router.post("/logout", function(req,res)
-{
-    res.clearCookie('token', {
-    httpOnly: true,
-    sameSite: 'None',
-    secure: true, 
-  });
-    res.send("Logged Out");
-})
- 
-router.post("/addtocart/:id", isloggedin, async function (req, res) {
+// Add to cart
+router.post("/addtocart/:id", isloggedin, async (req, res) => {
   try {
     const productId = req.params.id;
-    const userEmail = req.user.email; 
+    const userEmail = req.user.email;
 
-    const user = await userModel.findOne({ email: userEmail }).populate("cart.product");;
+    const user = await userModel.findOne({ email: userEmail }).populate("cart.product");
+    if (!user) return res.status(404).send("User not found");
 
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-
-    
-    const existingProductIndex = user.cart.findIndex(
-      (item) => item.product._id.toString() === productId
-    );
-
+    const existingProductIndex = user.cart.findIndex(item => item.product._id.toString() === productId);
     if (existingProductIndex > -1) {
-    
       user.cart[existingProductIndex].quantity += 1;
     } else {
-     
-       const product = await productModel.findById(productId);
-  if (!product) return res.status(404).send("Product not found");
-
-  user.cart.push({
-    product: product._id,
-    quantity: 1,
-    price: product.price // এখানে price save করতে পারো
-  });
+      const product = await productModel.findById(productId);
+      if (!product) return res.status(404).send("Product not found");
+      user.cart.push({ product: product._id, quantity: 1, price: product.price });
     }
 
-     // total price update
+    // Update total
     user.cartTotal = user.cart.reduce((sum, item) => {
-  const price = item.price || item.product?.price || 0;
-  return sum + (price * item.quantity);
-}, 0);
-
+      const price = item.price || item.product?.price || 0;
+      return sum + price * item.quantity;
+    }, 0);
 
     await user.save();
+    cache.del(userEmail); // clear cache
 
-    cache.del(userEmail);
-
-    res.status(200).json({
-      message: "Product added to cart successfully",
-      cart: user.cart,
-      cartTotal: user.cartTotal
-    });
+    res.status(200).json({ message: "Product added to cart successfully", cart: user.cart, cartTotal: user.cartTotal });
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
 
-router.post("/removefromcart/:id", isloggedin, async function (req, res) {
+// Remove from cart
+router.post("/removefromcart/:id", isloggedin, async (req, res) => {
   try {
     const productId = req.params.id;
     const userEmail = req.user.email;
-    const removeCompletely = req.body.removeCompletely || false; // if true it will remove completly;
+    const removeCompletely = req.body.removeCompletely || false;
 
-    const user = await userModel.findOne({ email: userEmail }).populate("cart.product");;
+    const user = await userModel.findOne({ email: userEmail }).populate("cart.product");
+    if (!user) return res.status(404).send("User not found");
 
-    if (!user) {
-      return res.status(404).send("User not found");
-    }
-
-    const existingProductIndex = user.cart.findIndex(
-      (item) => item.product._id.toString() === productId
-    );
-
-    if (existingProductIndex > -1) {
-      if (removeCompletely || user.cart[existingProductIndex].quantity <= 1) {
-        // remove completly;
-        user.cart.splice(existingProductIndex, 1);
+    const index = user.cart.findIndex(item => item.product._id.toString() === productId);
+    if (index > -1) {
+      if (removeCompletely || user.cart[index].quantity <= 1) {
+        user.cart.splice(index, 1);
       } else {
-        // just decreasre quantity;
-        user.cart[existingProductIndex].quantity -= 1;
+        user.cart[index].quantity -= 1;
       }
 
-       // total price update
-      user.cartTotal = user.cart.reduce((sum, item) => {
-        return sum + (item.product.price * item.quantity);
-      }, 0);
-
+      user.cartTotal = user.cart.reduce((sum, item) => sum + (item.price || item.product.price) * item.quantity, 0);
       await user.save();
-
       cache.del(userEmail);
 
-      res.status(200).json({
-        message: "Product removed from cart successfully",
-        cart: user.cart,
-        cartTotal: user.cartTotal
-      });
+      res.status(200).json({ message: "Product removed from cart successfully", cart: user.cart, cartTotal: user.cartTotal });
     } else {
       res.status(404).send("Product not found in cart");
     }
@@ -265,6 +110,4 @@ router.post("/removefromcart/:id", isloggedin, async function (req, res) {
   }
 });
 
-
-
-module.exports=router;
+module.exports = router;
