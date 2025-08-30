@@ -35,32 +35,39 @@ router.get("/orders", isloggedin, async (req, res) => {
 });
 
 // Get user's cart
+// Get user's cart
 router.get("/cart", isloggedin, async (req, res) => {
   try {
     const userEmail = req.user.email;
-
-    const cachedCart = cache.get(userEmail);
-    if (cachedCart) return res.status(200).json(cachedCart);
-
     const user = await userModel.findOne({ email: userEmail }).populate("cart.product", "name image price");
     if (!user) return res.status(404).send("User not found");
 
-    const cartData = user.cart.map(item => ({
-      _id: item.product._id,
-      name: item.product.name,
-      image: item.product.image,
-      quantity: item.quantity,
-      price: item.price || item.product.price
-    }));
+    // Combine duplicates
+    const cartMap = new Map();
+    user.cart.forEach(item => {
+      const id = item.product._id.toString();
+      if (cartMap.has(id)) {
+        const existing = cartMap.get(id);
+        existing.quantity += item.quantity;
+      } else {
+        cartMap.set(id, {
+          _id: id,
+          name: item.product.name,
+          image: item.product.image,
+          price: item.price || item.product.price,
+          quantity: item.quantity
+        });
+      }
+    });
 
-    const response = { cart: cartData, cartTotal: user.cartTotal };
-    cache.set(userEmail, response);
-    res.status(200).json(response);
+    const cartData = Array.from(cartMap.values());
 
+    res.status(200).json({ cart: cartData, cartTotal: user.cartTotal });
   } catch (err) {
     res.status(500).send(err.message);
   }
 });
+
 
 router.post("/register",async function(req,res){
 
